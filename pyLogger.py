@@ -1,11 +1,10 @@
 from datetime import datetime
 import time, sys
 
-#пользовательская библиотека
-import pyTools
-Tools = pyTools.Tools()
+#пользовательские библиотеки
+from User_libs import PlotterClass, ParseLoggerArguments, CreateSavePath, FormatTime
 
-print('pyLogger v0.8.1 - 2025.11.12')
+print('pyLogger v0.8.2 - 2025.11.19')
 
 #структура стартовых аргументов:
 ''' DeviceName,        str,    имя используемого прибора
@@ -25,11 +24,14 @@ print('pyLogger v0.8.1 - 2025.11.12')
 
 #парсим строковые аргументы, получаются словари (аргументы см. выше):
 #Arguments = {'ArgumentName':ArgumentValue, ...}
-#ConnectionDetails = {'ConnectionMethod':'TCPIP', ...}
-Arguments, ConnectionDetails = Tools.ParseArguments(LaunchArguments=sys.argv[1:], )
+Arguments = ParseLoggerArguments(LaunchArguments=sys.argv[1:], )
+#список имен аргументов, относящихся к установке соединения с прибором
+ConnectNames = ['ConnectionMethod', 'DeviceAddress', 'DevicePort', 'DeviceSerial', ]
+#словарь с аргументами для установки соединения, передается в Device.Initialize()
+ConnectionDetails = {name: Arguments[name] for name in ConnectNames if name in Arguments}
 
 #библиотеки управления приборами
-import tonghui_TH1992B, tonghui_TH2690A
+from Tonghui_libs import tonghui_TH1992B, tonghui_TH2690A
 #создаем объект класса из библиотеки, соответствующей заданному имени прибора
 exec(f'DEVICE = {Arguments['DeviceName']}.Device()')
 
@@ -41,7 +43,7 @@ if not DEVICE.ConfigureDevice(ConfigName=Arguments['ConfigName'], ):
     sys.exit(1)'''
 
 #генератор пути к папке, в которую будут сохраняться данные
-SavePath = Tools.CreateSavePath(__file__, LAN_Path='\\\\MetroBulk\\Public\\EXP_DATA1')
+SavePath = CreateSavePath(__file__, LAN_Path='\\\\MetroBulk\\Public\\EXP_DATA1')
 #генерируем уникальное имя файла и добавляем путь к нему
 FilePath = SavePath + DEVICE.Name + ' ' + datetime.now().strftime("%Y-%m-%d %H-%M-%S")
 
@@ -55,7 +57,7 @@ WholeTime = (Arguments['MeasPoints'] - 1) * Arguments['MeasTime']
 print(f'''\
 Желаемое время измерения\t= {Arguments['MeasTime']} сек
 Количество измерений (точек)\t= {Arguments['MeasPoints']}
-Ожидаемое время выполнения\t= {Tools.FormatTime(WholeTime)}
+Ожидаемое время выполнения\t= {FormatTime(WholeTime)}
 Сохраняем данные в {SavePath}
 ...........
 Время начала измерений: \t{datetime.now().strftime('%Y-%m-%d %H:%M')}''')
@@ -69,13 +71,15 @@ if Arguments['EnablePlot']:
                                   'x_pts'  : Arguments['CanvasPoints'],
                                  }, 
                        }
-    Plotter = pyTools.Plotter(Arguments['LineNames'], **PlotterArguments)
+    Plotter = PlotterClass(Arguments['LineNames'], **PlotterArguments)
 
 
 
 ttc = {'t_op_start':0, 't_op_finish':0, 't_op_fact':0, }
 
 def correct_sleep():
+    
+    #всратое говно уже не помню как работает. но работает
 
     #время, затраченное с момента начала измерений
     ttc['t_op_finish'] = time.time() - tt1
@@ -115,7 +119,8 @@ try:
 
         #индекс текущей точки (для отладки)
         meas_index = PointsList.index(i)
-        
+
+        #измерение
         results = DEVICE.SingleMeasure()
         #время измерения
         result_time = time.time() - tt1
